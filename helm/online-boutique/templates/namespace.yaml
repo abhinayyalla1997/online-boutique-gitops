@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.global.namespace }}
+  labels:
+    name: {{ .Values.global.namespace }}
+    env: production
+    team: platform
+    {{- include "online-boutique.labels" . | nindent 4 }}

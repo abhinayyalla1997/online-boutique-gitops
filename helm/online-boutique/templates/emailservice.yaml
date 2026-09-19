@@ -1,0 +1,96 @@
+# ============================================================
+# Email Service — Python
+# Sends order confirmation emails
+# gRPC on port 8080
+# Called by: checkoutservice only
+# Low traffic — 1 replica is fine
+# ============================================================
+{{- if .Values.emailservice.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: emailservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: emailservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.emailservice.replicaCount }}
+  selector:
+    matchLabels:
+      app: emailservice
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: emailservice
+        version: v1
+    spec:
+      serviceAccountName: emailservice-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: emailservice
+          image: {{ include "online-boutique.image" (dict "service" .Values.emailservice "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: PORT_EMAIL
+            - name: DISABLE_PROFILER
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: DISABLE_PROFILER
+          resources:
+            {{- toYaml .Values.emailservice.resources | nindent 12 }}
+          livenessProbe:
+            grpc:
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            grpc:
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: emailservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: emailservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: emailservice
+  ports:
+    - name: grpc
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+{{- end }}

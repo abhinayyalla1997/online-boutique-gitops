@@ -1,0 +1,41 @@
+# ============================================================
+# values-prod.yaml — production overrides
+# Merged on top of values.yaml during helm install
+# helm install ... -f values.yaml -f values-prod.yaml
+# ============================================================
+
+global:
+  imageTag: "REPLACE_WITH_CI_TAG"   # updated by GitHub Actions
+
+# Higher replicas in prod
+frontend:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: 200m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+cartservice:
+  replicaCount: 3
+
+checkoutservice:
+  replicaCount: 3
+
+productcatalogservice:
+  replicaCount: 3
+
+currencyservice:
+  replicaCount: 2
+
+# Disable load generator in prod — real users only
+loadgenerator:
+  enabled: false
+
+# Enable TLS in prod
+ingress:
+  host: boutique.yourdomain.com
+  tls:
+    enabled: true

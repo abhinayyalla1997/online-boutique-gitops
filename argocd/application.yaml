@@ -1,0 +1,37 @@
+# Argo CD Application for Online Boutique — frontend-only scope (2026-09-19).
+# Apply this manually with a write-access kubeconfig:
+#   kubectl apply -f argocd/application.yaml
+#
+# Argo CD Image Updater annotations below tell it to watch the online-boutique
+# ECR repo for frontend-<sha> tags and write the newest one back into
+# helm/online-boutique/values.yaml (frontend.image.tag) via a Git commit,
+# using Argo CD's own already-configured Git credentials for this repo —
+# no PAT lives in the app repo's CD pipeline. See CLAUDE.md's "GitOps repo
+# update mechanism" decision.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: online-boutique
+  namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: frontend=566279697030.dkr.ecr.us-east-1.amazonaws.com/online-boutique
+    argocd-image-updater.argoproj.io/frontend.allow-tags: regexp:^frontend-[0-9a-f]{40}$
+    argocd-image-updater.argoproj.io/frontend.update-strategy: latest
+    argocd-image-updater.argoproj.io/frontend.helm.image-tag: frontend.image.tag
+    argocd-image-updater.argoproj.io/write-back-method: git
+    argocd-image-updater.argoproj.io/git-branch: main
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/abhinayyalla1997/online-boutique-gitops.git
+    targetRevision: main
+    path: helm/online-boutique
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: boutique
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

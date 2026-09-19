@@ -1,0 +1,51 @@
+# ============================================================
+# ConfigMap — non-sensitive configuration
+# Sensitive values (passwords, tokens) go in secrets.yaml
+# Service addresses use K8s DNS: <service-name>.<namespace>.svc.cluster.local
+# Short form works within same namespace: <service-name>:<port>
+# ============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: boutique-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "online-boutique.labels" . | nindent 4 }}
+data:
+  # ---- Service discovery addresses ----
+  # K8s DNS resolves these automatically within the cluster
+  PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+  CURRENCY_SERVICE_ADDR: "currencyservice:7000"
+  CART_SERVICE_ADDR: "cartservice:7070"
+  RECOMMENDATION_SERVICE_ADDR: "recommendationservice:8080"
+  SHIPPING_SERVICE_ADDR: "shippingservice:50051"
+  CHECKOUT_SERVICE_ADDR: "checkoutservice:5050"
+  AD_SERVICE_ADDR: "adservice:9555"
+  EMAIL_SERVICE_ADDR: "emailservice:8080"
+  PAYMENT_SERVICE_ADDR: "paymentservice:50051"
+  SHOPPING_ASSISTANT_SERVICE_ADDR: "shoppingassistantservice:8080"
+  REDIS_ADDR: "redis-cart:6379"
+  FRONTEND_ADDR: "frontend:80"
+
+  # ---- Feature flags ----
+  DISABLE_PROFILER: "1"
+  DISABLE_STATS: "1"
+  DISABLE_TRACING: "1"
+  ENABLE_PROFILER: "0"
+
+  # ---- Platform config ----
+  ENV_PLATFORM: "aws"
+  PORT_FRONTEND: "8080"
+  PORT_CHECKOUT: "5050"
+  PORT_CURRENCY: "7000"
+  PORT_CART: "7070"
+  PORT_PAYMENT: "50051"
+  PORT_PRODUCT: "3550"
+  PORT_EMAIL: "8080"
+  PORT_RECOMMENDATION: "8080"
+  PORT_SHIPPING: "50051"
+  PORT_AD: "9555"
+  PORT_SHOPPING_ASSISTANT: "8080"
+
+  # ---- Load generator ----
+  USERS: "10"

@@ -1,0 +1,139 @@
+# ============================================================
+# Checkout Service — Go
+# Orchestrates the entire order flow
+# Calls: cartservice, productcatalog, currency, shipping,
+#        payment, email
+# gRPC on port 5050
+# Most critical service — handles money
+# ============================================================
+{{- if .Values.checkoutservice.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkoutservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: checkoutservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.checkoutservice.replicaCount }}
+  selector:
+    matchLabels:
+      app: checkoutservice
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: checkoutservice
+        version: v1
+    spec:
+      serviceAccountName: checkoutservice-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - checkoutservice
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: checkoutservice
+          image: {{ include "online-boutique.image" (dict "service" .Values.checkoutservice "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: 5050
+              protocol: TCP
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: PORT_CHECKOUT
+            - name: PRODUCT_CATALOG_SERVICE_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: PRODUCT_CATALOG_SERVICE_ADDR
+            - name: SHIPPING_SERVICE_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: SHIPPING_SERVICE_ADDR
+            - name: PAYMENT_SERVICE_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: PAYMENT_SERVICE_ADDR
+            - name: EMAIL_SERVICE_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: EMAIL_SERVICE_ADDR
+            - name: CURRENCY_SERVICE_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: CURRENCY_SERVICE_ADDR
+            - name: CART_SERVICE_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: CART_SERVICE_ADDR
+            - name: DISABLE_PROFILER
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: DISABLE_PROFILER
+          resources:
+            {{- toYaml .Values.checkoutservice.resources | nindent 12 }}
+          livenessProbe:
+            grpc:
+              port: 5050
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            grpc:
+              port: 5050
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: checkoutservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: checkoutservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: checkoutservice
+  ports:
+    - name: grpc
+      port: 5050
+      targetPort: 5050
+      protocol: TCP
+{{- end }}

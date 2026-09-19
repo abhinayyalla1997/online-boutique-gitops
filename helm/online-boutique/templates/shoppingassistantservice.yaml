@@ -1,0 +1,103 @@
+# ============================================================
+# Shopping Assistant Service — Python
+# AI-powered shopping assistant
+# HTTP on port 8080
+# Calls: productcatalogservice
+# ============================================================
+{{- if .Values.shoppingassistantservice.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shoppingassistantservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: shoppingassistantservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.shoppingassistantservice.replicaCount }}
+  selector:
+    matchLabels:
+      app: shoppingassistantservice
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: shoppingassistantservice
+        version: v1
+    spec:
+      serviceAccountName: shoppingassistantservice-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: shoppingassistantservice
+          image: {{ include "online-boutique.image" (dict "service" .Values.shoppingassistantservice "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: PORT_SHOPPING_ASSISTANT
+            - name: PRODUCT_CATALOG_SERVICE_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: PRODUCT_CATALOG_SERVICE_ADDR
+            # API key from Secret
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: boutique-secrets
+                  key: GOOGLE_API_KEY
+          resources:
+            {{- toYaml .Values.shoppingassistantservice.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shoppingassistantservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: shoppingassistantservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: shoppingassistantservice
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+{{- end }}

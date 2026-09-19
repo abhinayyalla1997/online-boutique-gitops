@@ -1,0 +1,303 @@
+# ============================================================
+# Network Policies — zero trust model
+# Default: deny ALL ingress and egress
+# Then explicitly allow only what is needed
+# This mirrors how real prod clusters are locked down
+#
+# Service call graph:
+# frontend → cartservice, productcatalog, currency,
+#            recommendation, shipping, checkout, adservice,
+#            shoppingassistant
+# checkoutservice → cartservice, productcatalog, currency,
+#                   shipping, payment, email
+# recommendationservice → productcatalog
+# loadgenerator → frontend only
+# paymentservice → nothing (only receives)
+# emailservice → nothing (only receives)
+# ============================================================
+{{- if .Values.networkPolicy.enabled }}
+
+# ---- Default deny all ----
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+
+# ---- Allow DNS for all pods (required for service discovery) ----
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: {{ .Values.global.namespace }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+
+# ---- Frontend ----
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-netpol
+  namespace: {{ .Values.global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Accept from ingress-nginx controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+    # Accept from loadgenerator (same namespace)
+    - from:
+        - podSelector:
+            matchLabels:
+              app: loadgenerator
+  egress:
+    # Can talk to all backend services
+    - to:
+        - podSelector:
+            matchLabels:
+              app: cartservice
+    - to:
+        - podSelector:
+            matchLabels:
+              app: productcatalogservice
+    - to:
+        - podSelector:
+            matchLabels:
+              app: currencyservice
+    - to:
+        - podSelector:
+            matchLabels:
+              app: recommendationservice
+    - to:
+        - podSelector:
+            matchLabels:
+              app: shippingservice
+    - to:
+        - podSelector:
+            matchLabels:
+              app: checkoutservice
+    - to:
+        - podSelector:
+            matchLabels:
+              app: adservice
+    - to:
+        - podSelector:
+            matchLabels:
+              app: shoppingassistantservice
+
+# ---- Cart Service ----
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cartservice-netpol
+  namespace: {{ .Values.global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: cartservice
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+    - from:
+        - podSelector:
+            matchLabels:
+              app: checkoutservice
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis-cart
+
+# ---- Checkout Service ----
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: checkoutservice-netpol
+  namespace: {{ .Values.global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: checkoutservice
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: cartservice
+    - to:
+        - podSelector:
+            matchLabels:
+              app: productcatalogservice
+    - to:
+        - podSelector:
+            matchLabels:
+              app: currencyservice
+    - to:
+        - podSelector:
+            matchLabels:
+              app: shippingservice
+    - to:
+        - podSelector:
+            matchLabels:
+              app: paymentservice
+    - to:
+        - podSelector:
+            matchLabels:
+              app: emailservice
+
+# ---- Payment Service — strictest policy ----
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: paymentservice-netpol
+  namespace: {{ .Values.global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: paymentservice
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Only checkoutservice can call payment
+    - from:
+        - podSelector:
+            matchLabels:
+              app: checkoutservice
+  egress: []   # payment service calls nothing
+
+# ---- Email Service ----
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: emailservice-netpol
+  namespace: {{ .Values.global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: emailservice
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: checkoutservice
+  egress: []
+
+# ---- Product Catalog Service ----
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: productcatalogservice-netpol
+  namespace: {{ .Values.global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: productcatalogservice
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+    - from:
+        - podSelector:
+            matchLabels:
+              app: checkoutservice
+    - from:
+        - podSelector:
+            matchLabels:
+              app: recommendationservice
+    - from:
+        - podSelector:
+            matchLabels:
+              app: shoppingassistantservice
+
+# ---- Recommendation Service ----
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: recommendationservice-netpol
+  namespace: {{ .Values.global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: recommendationservice
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: productcatalogservice
+
+# ---- Allow Prometheus to scrape metrics from all pods ----
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-scrape
+  namespace: {{ .Values.global.namespace }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+
+{{- end }}

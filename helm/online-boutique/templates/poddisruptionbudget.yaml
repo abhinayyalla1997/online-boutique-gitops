@@ -1,0 +1,42 @@
+# ============================================================
+# Pod Disruption Budgets
+# Guarantees minimum available pods during:
+#   - Node drain (cluster upgrade)
+#   - Node maintenance
+#   - Voluntary disruptions
+#
+# minAvailable: 1 means at least 1 pod always running
+# During cluster upgrade when you drain a node,
+# K8s will not evict the last pod of any service
+# ============================================================
+{{- if .Values.podDisruptionBudget.enabled }}
+
+{{- $services := list
+  "frontend"
+  "cartservice"
+  "checkoutservice"
+  "currencyservice"
+  "productcatalogservice"
+  "recommendationservice"
+  "shippingservice"
+  "adservice"
+}}
+
+{{- range $services }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ . }}-pdb
+  namespace: {{ $.Values.global.namespace }}
+  labels:
+    app: {{ . }}
+    {{- include "online-boutique.labels" $ | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: {{ . }}
+{{- end }}
+
+{{- end }}

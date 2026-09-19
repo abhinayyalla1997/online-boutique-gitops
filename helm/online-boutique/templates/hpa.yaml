@@ -1,0 +1,169 @@
+# ============================================================
+# Horizontal Pod Autoscaler
+# Only on services that handle direct user traffic
+# Services with predictable low traffic don't need HPA
+#
+# Scale up fast, scale down slow (stabilization window)
+# This prevents flapping during traffic spikes
+# ============================================================
+{{- if .Values.hpa.enabled }}
+
+# ---- Frontend ----
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend-hpa
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: frontend
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: frontend
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300    # wait 5 min before scaling down
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60              # remove max 1 pod per minute
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 30              # add max 2 pods per 30 seconds
+
+# ---- Cart Service ----
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cartservice-hpa
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: cartservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cartservice
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+
+# ---- Checkout Service — scale carefully, handles payments ----
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: checkoutservice-hpa
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: checkoutservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: checkoutservice
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60          # lower threshold for critical service
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600     # 10 min — very conservative for payment flows
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+    scaleUp:
+      stabilizationWindowSeconds: 0       # scale up immediately
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 30
+
+# ---- Product Catalog — read heavy, scale aggressively ----
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: productcatalogservice-hpa
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: productcatalogservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: productcatalogservice
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 15
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+
+{{- end }}

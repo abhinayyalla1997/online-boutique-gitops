@@ -1,0 +1,108 @@
+# ============================================================
+# Cart Service — C# .NET
+# Depends on Redis for session storage
+# gRPC on port 7070
+# Called by: frontend, checkoutservice
+# ============================================================
+{{- if .Values.cartservice.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cartservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: cartservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.cartservice.replicaCount }}
+  selector:
+    matchLabels:
+      app: cartservice
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: cartservice
+        version: v1
+    spec:
+      serviceAccountName: cartservice-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      terminationGracePeriodSeconds: 30
+      # Soft anti-affinity — prefer different nodes but don't block scheduling
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - cartservice
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: cartservice
+          image: {{ include "online-boutique.image" (dict "service" .Values.cartservice "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: 7070
+              protocol: TCP
+          env:
+            - name: REDIS_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: REDIS_ADDR
+            - name: DISABLE_PROFILER
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: DISABLE_PROFILER
+          resources:
+            {{- toYaml .Values.cartservice.resources | nindent 12 }}
+          livenessProbe:
+            grpc:
+              port: 7070
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            grpc:
+              port: 7070
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cartservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: cartservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: cartservice
+  ports:
+    - name: grpc
+      port: 7070
+      targetPort: 7070
+      protocol: TCP
+{{- end }}

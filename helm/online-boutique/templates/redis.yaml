@@ -1,0 +1,78 @@
+# ============================================================
+# Redis — session storage for cartservice
+# Single instance — for HA use Redis Cluster or AWS ElastiCache
+# Uses emptyDir for this project (data lost on pod restart)
+# In prod: use PVC with EBS for persistence
+# ============================================================
+{{- if .Values.redis.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-cart
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: redis-cart
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-cart
+  template:
+    metadata:
+      labels:
+        app: redis-cart
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999   # redis official image default uid
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: redis
+          image: redis:alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          command: ["redis-server"]
+          args: ["--save", ""]   # disable RDB persistence, pure in-memory
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+      volumes:
+        - name: redis-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cart
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: redis-cart
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: redis-cart
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+      protocol: TCP
+{{- end }}

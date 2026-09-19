@@ -1,0 +1,187 @@
+# ============================================================
+# Frontend Service
+# - Only service exposed externally via Ingress
+# - Go application, HTTP on port 8080
+# - Calls ALL other services via gRPC
+# - 2 replicas with hard anti-affinity (spread across nodes)
+# ============================================================
+{{- if .Values.frontend.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: frontend
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      app: frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0   # zero downtime — new pod must be ready before old is removed
+  template:
+    metadata:
+      labels:
+        app: frontend
+        version: v1
+      annotations:
+        # Prometheus scrape annotations (backup to ServiceMonitor)
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: frontend-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      terminationGracePeriodSeconds: 30
+      # Hard anti-affinity — replicas MUST go to different nodes
+      # If only 1 node available, second replica stays Pending
+      # This is intentional — we want true HA
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - frontend
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: frontend
+          image: {{ include "online-boutique.image" (dict "service" .Values.frontend "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            # Pull from ConfigMap — keeps Deployment clean
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: PORT_FRONTEND
+            - name: PRODUCT_CATALOG_SERVICE_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: PRODUCT_CATALOG_SERVICE_ADDR
+            - name: CURRENCY_SERVICE_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: CURRENCY_SERVICE_ADDR
+            - name: CART_SERVICE_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: CART_SERVICE_ADDR
+            - name: RECOMMENDATION_SERVICE_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: RECOMMENDATION_SERVICE_ADDR
+            - name: SHIPPING_SERVICE_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: SHIPPING_SERVICE_ADDR
+            - name: CHECKOUT_SERVICE_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: CHECKOUT_SERVICE_ADDR
+            - name: AD_SERVICE_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: AD_SERVICE_ADDR
+            - name: SHOPPING_ASSISTANT_SERVICE_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: SHOPPING_ASSISTANT_SERVICE_ADDR
+            - name: ENV_PLATFORM
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: ENV_PLATFORM
+            - name: ENABLE_PROFILER
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: ENABLE_PROFILER
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+---
+# ClusterIP — internal service-to-service
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: frontend
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+---
+# NodePort — direct access for testing without ingress
+# Access via: http://<any-node-ip>:30000
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-external
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: frontend
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  type: NodePort
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      nodePort: 30000
+      protocol: TCP
+{{- end }}

@@ -1,0 +1,43 @@
+# ============================================================
+# Ingress — nginx ingress controller
+# Routes external traffic to frontend service
+# TLS optional — enable in values.yaml
+# ============================================================
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-ingress
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: frontend
+    {{- include "online-boutique.labels" . | nindent 4 }}
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    # Rate limiting — 100 req/min per IP
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    # Enable GZIP compression
+    nginx.ingress.kubernetes.io/enable-compression: "true"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host }}
+      secretName: boutique-tls
+  {{- end }}
+{{- end }}

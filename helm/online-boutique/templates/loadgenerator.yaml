@@ -1,0 +1,96 @@
+# ============================================================
+# Load Generator — Python Locust
+# Simulates real user traffic against frontend
+# HTTP UI on port 8089
+# Only hits frontend — simulates browsing, adding to cart, checkout
+# Disable in prod, keep enabled for testing/demo
+# ============================================================
+{{- if .Values.loadgenerator.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgenerator
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: loadgenerator
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.loadgenerator.replicaCount }}
+  selector:
+    matchLabels:
+      app: loadgenerator
+  template:
+    metadata:
+      labels:
+        app: loadgenerator
+        version: v1
+    spec:
+      serviceAccountName: loadgenerator-sa
+      automountServiceAccountToken: false
+      # Wait for frontend to be ready before starting load
+      initContainers:
+        - name: wait-frontend
+          image: busybox:latest
+          command:
+            - sh
+            - -c
+            - |
+              until wget -q --spider http://frontend:80/healthz; do
+                echo "waiting for frontend..."
+                sleep 3
+              done
+              echo "frontend is ready"
+      containers:
+        - name: loadgenerator
+          image: {{ include "online-boutique.image" (dict "service" .Values.loadgenerator "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8089
+              protocol: TCP
+          env:
+            - name: FRONTEND_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: FRONTEND_ADDR
+            - name: USERS
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: USERS
+          resources:
+            {{- toYaml .Values.loadgenerator.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8089
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8089
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loadgenerator
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: loadgenerator
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: loadgenerator
+  ports:
+    - name: http
+      port: 8089
+      targetPort: 8089
+      protocol: TCP
+{{- end }}

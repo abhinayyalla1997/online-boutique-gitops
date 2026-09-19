@@ -1,0 +1,95 @@
+# ============================================================
+# Shipping Service — Go
+# Calculates shipping costs and tracking IDs
+# gRPC on port 50051
+# Called by: frontend, checkoutservice
+# ============================================================
+{{- if .Values.shippingservice.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shippingservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: shippingservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.shippingservice.replicaCount }}
+  selector:
+    matchLabels:
+      app: shippingservice
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: shippingservice
+        version: v1
+    spec:
+      serviceAccountName: shippingservice-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: shippingservice
+          image: {{ include "online-boutique.image" (dict "service" .Values.shippingservice "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: PORT_SHIPPING
+            - name: DISABLE_PROFILER
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: DISABLE_PROFILER
+          resources:
+            {{- toYaml .Values.shippingservice.resources | nindent 12 }}
+          livenessProbe:
+            grpc:
+              port: 50051
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            grpc:
+              port: 50051
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shippingservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: shippingservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: shippingservice
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+      protocol: TCP
+{{- end }}

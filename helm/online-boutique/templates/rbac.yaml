@@ -1,0 +1,155 @@
+# ============================================================
+# RBAC — production pattern
+# - One ServiceAccount per microservice (never use default SA)
+# - automountServiceAccountToken: false (security best practice)
+# - Role per team with least privilege
+# - ClusterRole for monitoring to scrape metrics cluster-wide
+# ============================================================
+
+# ---- ServiceAccounts — one per service ----
+{{- $services := list
+  "frontend"
+  "cartservice"
+  "checkoutservice"
+  "currencyservice"
+  "emailservice"
+  "paymentservice"
+  "productcatalogservice"
+  "recommendationservice"
+  "shippingservice"
+  "adservice"
+  "loadgenerator"
+  "shoppingassistantservice"
+}}
+
+{{- range $services }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ . }}-sa
+  namespace: {{ $.Values.global.namespace }}
+  labels:
+    app: {{ . }}
+    {{- include "online-boutique.labels" $ | nindent 4 }}
+automountServiceAccountToken: false
+{{- end }}
+
+# ---- Roles ----
+
+# Platform team — full access to boutique namespace
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: platform-admin-role
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "online-boutique.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+
+# Dev team — read only, pods/logs only
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer-role
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "online-boutique.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "services", "configmaps", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+
+# ---- RoleBindings ----
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: platform-admin-binding
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "online-boutique.labels" . | nindent 4 }}
+subjects:
+  - kind: Group
+    name: platform-team
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: platform-admin-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: developer-binding
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "online-boutique.labels" . | nindent 4 }}
+subjects:
+  - kind: Group
+    name: dev-team
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: developer-role
+  apiGroup: rbac.authorization.k8s.io
+
+# ---- ClusterRole — monitoring needs cluster-wide read ----
+# Prometheus scrapes metrics from ALL namespaces
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-monitoring-clusterrole
+  labels:
+    {{- include "online-boutique.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/proxy
+      - nodes/metrics
+      - services
+      - endpoints
+      - pods
+      - namespaces
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["extensions", "networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics", "/metrics/cadvisor"]
+    verbs: ["get"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: monitoring-sa
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "online-boutique.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-monitoring-clusterrolebinding
+  labels:
+    {{- include "online-boutique.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: monitoring-sa
+    namespace: {{ .Values.global.namespace }}
+roleRef:
+  kind: ClusterRole
+  name: {{ .Release.Name }}-monitoring-clusterrole
+  apiGroup: rbac.authorization.k8s.io

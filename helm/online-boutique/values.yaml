@@ -1,0 +1,232 @@
+# ============================================================
+# values.yaml — GitOps repo defaults
+#
+# SCOPE (2026-09-19): only `frontend` is enabled. This is deliberate —
+# we're validating the full CI -> ECR -> Argo CD Image Updater -> Argo CD
+# -> cluster pipeline end to end with one service before expanding to the
+# other 11. Flip a service's `enabled` to `true` (and give it an
+# `image.tag`) to bring it online; the chart/templates already support all
+# 12, nothing structural needs to change.
+#
+# frontend.image.tag starts pinned to the first real CD build's Git SHA
+# tag. From here on, Argo CD Image Updater overwrites this value whenever
+# a new frontend-<sha> tag lands in ECR — do not hand-edit it afterwards.
+# ============================================================
+
+global:
+  namespace: boutique
+  imageRegistry: "566279697030.dkr.ecr.us-east-1.amazonaws.com"
+  imageRepository: "online-boutique"
+  imageTag: "unused" # every enabled service below sets its own image.tag
+  imagePullPolicy: Always
+
+secrets:
+  googleApiKey: "placeholder-replace-in-prod"
+  paymentGatewayApiKey: "placeholder"
+
+frontend:
+  enabled: true
+  replicaCount: 2
+  image:
+    name: frontend
+    useGlobal: true
+    tag: "frontend-17558cec861b5017ffbdddac1d728d450364bf4c" # bootstrap value — see note above; full tag, matches _helpers.tpl
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+cartservice:
+  enabled: false
+  replicaCount: 2
+  image:
+    name: cartservice
+    useGlobal: true
+  resources:
+    requests:
+      cpu: 200m
+      memory: 64Mi
+    limits:
+      cpu: 300m
+      memory: 128Mi
+
+redis:
+  enabled: false
+  replicaCount: 1
+  image:
+    repository: redis
+    tag: alpine
+    useGlobal: false
+  resources:
+    requests:
+      cpu: 70m
+      memory: 200Mi
+    limits:
+      cpu: 125m
+      memory: 256Mi
+
+checkoutservice:
+  enabled: false
+  replicaCount: 2
+  image:
+    name: checkoutservice
+    useGlobal: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+currencyservice:
+  enabled: false
+  replicaCount: 2
+  image:
+    name: currencyservice
+    useGlobal: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+emailservice:
+  enabled: false
+  replicaCount: 1
+  image:
+    name: emailservice
+    useGlobal: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+paymentservice:
+  enabled: false
+  replicaCount: 1
+  image:
+    name: paymentservice
+    useGlobal: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+productcatalogservice:
+  enabled: false
+  replicaCount: 2
+  image:
+    name: productcatalogservice
+    useGlobal: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+recommendationservice:
+  enabled: false
+  replicaCount: 1
+  image:
+    name: recommendationservice
+    useGlobal: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 220Mi
+    limits:
+      cpu: 200m
+      memory: 450Mi
+
+shippingservice:
+  enabled: false
+  replicaCount: 1
+  image:
+    name: shippingservice
+    useGlobal: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+adservice:
+  enabled: false
+  replicaCount: 1
+  image:
+    name: adservice
+    useGlobal: true
+  resources:
+    requests:
+      cpu: 200m
+      memory: 180Mi
+    limits:
+      cpu: 300m
+      memory: 300Mi
+
+shoppingassistantservice:
+  enabled: false
+  replicaCount: 1
+  image:
+    name: shoppingassistantservice
+    useGlobal: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+loadgenerator:
+  enabled: false
+  replicaCount: 1
+  image:
+    name: loadgenerator
+    useGlobal: true
+  resources:
+    requests:
+      cpu: 300m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# No ingress-nginx controller in the cluster yet — reachability for now is
+# via frontend's NodePort Service (see templates/frontend.yaml), port 30000
+# on any worker node's public IP. Revisit once an ingress controller exists.
+ingress:
+  enabled: false
+  className: nginx
+  host: boutique.example.com
+  tls:
+    enabled: false
+
+# Off for now — hpa.yaml hardcodes HPA objects for services not yet
+# deployed (cartservice, checkoutservice, productcatalogservice); enabling
+# this before those services exist just produces harmless but noisy
+# "unable to fetch metrics" warnings.
+hpa:
+  enabled: false
+
+networkPolicy:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false

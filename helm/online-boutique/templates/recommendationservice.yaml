@@ -1,0 +1,101 @@
+# ============================================================
+# Recommendation Service — Python
+# Returns product recommendations
+# gRPC on port 8080
+# Calls: productcatalogservice
+# Higher memory — Python ML libraries
+# ============================================================
+{{- if .Values.recommendationservice.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recommendationservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: recommendationservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.recommendationservice.replicaCount }}
+  selector:
+    matchLabels:
+      app: recommendationservice
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: recommendationservice
+        version: v1
+    spec:
+      serviceAccountName: recommendationservice-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: recommendationservice
+          image: {{ include "online-boutique.image" (dict "service" .Values.recommendationservice "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: PORT_RECOMMENDATION
+            - name: PRODUCT_CATALOG_SERVICE_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: PRODUCT_CATALOG_SERVICE_ADDR
+            - name: DISABLE_PROFILER
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: DISABLE_PROFILER
+          resources:
+            {{- toYaml .Values.recommendationservice.resources | nindent 12 }}
+          livenessProbe:
+            grpc:
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            grpc:
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: recommendationservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: recommendationservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: recommendationservice
+  ports:
+    - name: grpc
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+{{- end }}

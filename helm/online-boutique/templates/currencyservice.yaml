@@ -1,0 +1,107 @@
+# ============================================================
+# Currency Service — Node.js
+# Converts prices between currencies
+# gRPC on port 7000
+# Called by: frontend, checkoutservice
+# ============================================================
+{{- if .Values.currencyservice.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: currencyservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: currencyservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.currencyservice.replicaCount }}
+  selector:
+    matchLabels:
+      app: currencyservice
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: currencyservice
+        version: v1
+    spec:
+      serviceAccountName: currencyservice-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - currencyservice
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: currencyservice
+          image: {{ include "online-boutique.image" (dict "service" .Values.currencyservice "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: 7000
+              protocol: TCP
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: PORT_CURRENCY
+            - name: DISABLE_PROFILER
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: DISABLE_PROFILER
+          resources:
+            {{- toYaml .Values.currencyservice.resources | nindent 12 }}
+          livenessProbe:
+            grpc:
+              port: 7000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            grpc:
+              port: 7000
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: currencyservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: currencyservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: currencyservice
+  ports:
+    - name: grpc
+      port: 7000
+      targetPort: 7000
+      protocol: TCP
+{{- end }}

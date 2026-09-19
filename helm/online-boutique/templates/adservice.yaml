@@ -1,0 +1,96 @@
+# ============================================================
+# Ad Service — Java
+# Returns context-based ads
+# gRPC on port 9555
+# Called by: frontend only
+# Higher memory — JVM overhead
+# ============================================================
+{{- if .Values.adservice.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: adservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.adservice.replicaCount }}
+  selector:
+    matchLabels:
+      app: adservice
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: adservice
+        version: v1
+    spec:
+      serviceAccountName: adservice-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: adservice
+          image: {{ include "online-boutique.image" (dict "service" .Values.adservice "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: 9555
+              protocol: TCP
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: PORT_AD
+            - name: DISABLE_STATS
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: DISABLE_STATS
+          resources:
+            {{- toYaml .Values.adservice.resources | nindent 12 }}
+          livenessProbe:
+            grpc:
+              port: 9555
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            grpc:
+              port: 9555
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: adservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: adservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: adservice
+  ports:
+    - name: grpc
+      port: 9555
+      targetPort: 9555
+      protocol: TCP
+{{- end }}

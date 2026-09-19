@@ -1,0 +1,96 @@
+# ============================================================
+# Payment Service — Node.js
+# Processes credit card transactions
+# gRPC on port 50051
+# Called by: checkoutservice only
+# High security — strictest NetworkPolicy applied
+# ============================================================
+{{- if .Values.paymentservice.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paymentservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: paymentservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.paymentservice.replicaCount }}
+  selector:
+    matchLabels:
+      app: paymentservice
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: paymentservice
+        version: v1
+    spec:
+      serviceAccountName: paymentservice-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: paymentservice
+          image: {{ include "online-boutique.image" (dict "service" .Values.paymentservice "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: PORT_PAYMENT
+            - name: DISABLE_PROFILER
+              valueFrom:
+                configMapKeyRef:
+                  name: boutique-config
+                  key: DISABLE_PROFILER
+          resources:
+            {{- toYaml .Values.paymentservice.resources | nindent 12 }}
+          livenessProbe:
+            grpc:
+              port: 50051
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            grpc:
+              port: 50051
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paymentservice
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: paymentservice
+    {{- include "online-boutique.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: paymentservice
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+      protocol: TCP
+{{- end }}
