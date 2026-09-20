@@ -1,23 +1,77 @@
-# Argo CD Application for Online Boutique — frontend-only scope (2026-09-19).
+# Argo CD Application for Online Boutique — 11 of 12 services (2026-09-20;
+# shoppingassistantservice excluded, see values.yaml for why).
 # Apply this manually with a write-access kubeconfig:
 #   kubectl apply -f argocd/application.yaml
 #
 # Argo CD Image Updater annotations below tell it to watch the online-boutique
-# ECR repo for frontend-<sha> tags and write the newest one back into
-# helm/online-boutique/values.yaml (frontend.image.tag) via a Git commit,
-# using Argo CD's own already-configured Git credentials for this repo —
-# no PAT lives in the app repo's CD pipeline. See CLAUDE.md's "GitOps repo
-# update mechanism" decision.
+# ECR repo for each service's <service>-<sha> tags and write the newest one
+# back into helm/online-boutique/values.yaml (<service>.image.tag) via a Git
+# commit, using Argo CD's own already-configured Git credentials for this
+# repo — no PAT lives in the app repo's CD pipeline. See CLAUDE.md's "GitOps
+# repo update mechanism" decision.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: online-boutique
   namespace: argocd
   annotations:
-    argocd-image-updater.argoproj.io/image-list: frontend=566279697030.dkr.ecr.us-east-1.amazonaws.com/online-boutique
+    argocd-image-updater.argoproj.io/image-list: >-
+      frontend=566279697030.dkr.ecr.us-east-1.amazonaws.com/online-boutique,
+      cartservice=566279697030.dkr.ecr.us-east-1.amazonaws.com/online-boutique,
+      checkoutservice=566279697030.dkr.ecr.us-east-1.amazonaws.com/online-boutique,
+      currencyservice=566279697030.dkr.ecr.us-east-1.amazonaws.com/online-boutique,
+      emailservice=566279697030.dkr.ecr.us-east-1.amazonaws.com/online-boutique,
+      paymentservice=566279697030.dkr.ecr.us-east-1.amazonaws.com/online-boutique,
+      productcatalogservice=566279697030.dkr.ecr.us-east-1.amazonaws.com/online-boutique,
+      recommendationservice=566279697030.dkr.ecr.us-east-1.amazonaws.com/online-boutique,
+      shippingservice=566279697030.dkr.ecr.us-east-1.amazonaws.com/online-boutique,
+      adservice=566279697030.dkr.ecr.us-east-1.amazonaws.com/online-boutique,
+      loadgenerator=566279697030.dkr.ecr.us-east-1.amazonaws.com/online-boutique
+
     argocd-image-updater.argoproj.io/frontend.allow-tags: regexp:^frontend-[0-9a-f]{40}$
     argocd-image-updater.argoproj.io/frontend.update-strategy: latest
     argocd-image-updater.argoproj.io/frontend.helm.image-tag: frontend.image.tag
+
+    argocd-image-updater.argoproj.io/cartservice.allow-tags: regexp:^cartservice-[0-9a-f]{40}$
+    argocd-image-updater.argoproj.io/cartservice.update-strategy: latest
+    argocd-image-updater.argoproj.io/cartservice.helm.image-tag: cartservice.image.tag
+
+    argocd-image-updater.argoproj.io/checkoutservice.allow-tags: regexp:^checkoutservice-[0-9a-f]{40}$
+    argocd-image-updater.argoproj.io/checkoutservice.update-strategy: latest
+    argocd-image-updater.argoproj.io/checkoutservice.helm.image-tag: checkoutservice.image.tag
+
+    argocd-image-updater.argoproj.io/currencyservice.allow-tags: regexp:^currencyservice-[0-9a-f]{40}$
+    argocd-image-updater.argoproj.io/currencyservice.update-strategy: latest
+    argocd-image-updater.argoproj.io/currencyservice.helm.image-tag: currencyservice.image.tag
+
+    argocd-image-updater.argoproj.io/emailservice.allow-tags: regexp:^emailservice-[0-9a-f]{40}$
+    argocd-image-updater.argoproj.io/emailservice.update-strategy: latest
+    argocd-image-updater.argoproj.io/emailservice.helm.image-tag: emailservice.image.tag
+
+    argocd-image-updater.argoproj.io/paymentservice.allow-tags: regexp:^paymentservice-[0-9a-f]{40}$
+    argocd-image-updater.argoproj.io/paymentservice.update-strategy: latest
+    argocd-image-updater.argoproj.io/paymentservice.helm.image-tag: paymentservice.image.tag
+
+    argocd-image-updater.argoproj.io/productcatalogservice.allow-tags: regexp:^productcatalogservice-[0-9a-f]{40}$
+    argocd-image-updater.argoproj.io/productcatalogservice.update-strategy: latest
+    argocd-image-updater.argoproj.io/productcatalogservice.helm.image-tag: productcatalogservice.image.tag
+
+    argocd-image-updater.argoproj.io/recommendationservice.allow-tags: regexp:^recommendationservice-[0-9a-f]{40}$
+    argocd-image-updater.argoproj.io/recommendationservice.update-strategy: latest
+    argocd-image-updater.argoproj.io/recommendationservice.helm.image-tag: recommendationservice.image.tag
+
+    argocd-image-updater.argoproj.io/shippingservice.allow-tags: regexp:^shippingservice-[0-9a-f]{40}$
+    argocd-image-updater.argoproj.io/shippingservice.update-strategy: latest
+    argocd-image-updater.argoproj.io/shippingservice.helm.image-tag: shippingservice.image.tag
+
+    argocd-image-updater.argoproj.io/adservice.allow-tags: regexp:^adservice-[0-9a-f]{40}$
+    argocd-image-updater.argoproj.io/adservice.update-strategy: latest
+    argocd-image-updater.argoproj.io/adservice.helm.image-tag: adservice.image.tag
+
+    argocd-image-updater.argoproj.io/loadgenerator.allow-tags: regexp:^loadgenerator-[0-9a-f]{40}$
+    argocd-image-updater.argoproj.io/loadgenerator.update-strategy: latest
+    argocd-image-updater.argoproj.io/loadgenerator.helm.image-tag: loadgenerator.image.tag
+
     argocd-image-updater.argoproj.io/write-back-method: git
     argocd-image-updater.argoproj.io/git-branch: main
 spec:

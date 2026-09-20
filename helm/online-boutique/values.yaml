@@ -1,16 +1,31 @@
 # ============================================================
 # values.yaml — GitOps repo defaults
 #
-# SCOPE (2026-09-19): only `frontend` is enabled. This is deliberate —
-# we're validating the full CI -> ECR -> Argo CD Image Updater -> Argo CD
-# -> cluster pipeline end to end with one service before expanding to the
-# other 11. Flip a service's `enabled` to `true` (and give it an
-# `image.tag`) to bring it online; the chart/templates already support all
-# 12, nothing structural needs to change.
+# 11 of 12 services enabled (2026-09-20) — CI/CD matrix now builds, scans,
+# and signs every service; all 12 have real images in ECR at commit
+# f2b66d9f1d6996b5bbcbf06b90dfa69bd040acb6. Bootstrap tags below are
+# pinned to that commit. From here on, Argo CD Image Updater overwrites
+# each service's image.tag whenever a newer <service>-<sha> tag lands in
+# ECR — do not hand-edit these tags afterwards.
 #
-# frontend.image.tag starts pinned to the first real CD build's Git SHA
-# tag. From here on, Argo CD Image Updater overwrites this value whenever
-# a new frontend-<sha> tag lands in ECR — do not hand-edit it afterwards.
+# NOT enabled, deliberately:
+# - shoppingassistantservice: its source calls Google Cloud AlloyDB,
+#   Secret Manager, and the Gemini API at module import time — this is
+#   an AWS-only project, so that GCP infrastructure doesn't exist here.
+#   The container would crash immediately on startup. CI/CD still
+#   builds/scans/signs it fine; only cluster deployment is out of scope.
+#   See the field comment below.
+# - networkPolicy: 6 of 12 enabled services (currencyservice,
+#   shippingservice, adservice, loadgenerator, redis-cart, and formerly
+#   shoppingassistantservice) have no explicit NetworkPolicy in
+#   templates/networkpolicy.yaml despite being legitimate traffic
+#   targets/sources per its own documented call graph. With
+#   default-deny-all in effect, enabling this as-is would silently break
+#   several service-to-service paths. Needs those policies added and
+#   audited before enabling.
+# - ingress: no ingress-nginx controller in the cluster yet — reachability
+#   is via frontend's NodePort Service (see templates/frontend.yaml),
+#   port 30000 on any worker node's public IP.
 # ============================================================
 
 global:
@@ -30,7 +45,7 @@ frontend:
   image:
     name: frontend
     useGlobal: true
-    tag: "frontend-17558cec861b5017ffbdddac1d728d450364bf4c" # bootstrap value — see note above; full tag, matches _helpers.tpl
+    tag: "frontend-f2b66d9f1d6996b5bbcbf06b90dfa69bd040acb6"
   resources:
     requests:
       cpu: 100m
@@ -40,11 +55,12 @@ frontend:
       memory: 128Mi
 
 cartservice:
-  enabled: false
+  enabled: true
   replicaCount: 2
   image:
     name: cartservice
     useGlobal: true
+    tag: "cartservice-f2b66d9f1d6996b5bbcbf06b90dfa69bd040acb6"
   resources:
     requests:
       cpu: 200m
@@ -54,7 +70,7 @@ cartservice:
       memory: 128Mi
 
 redis:
-  enabled: false
+  enabled: true
   replicaCount: 1
   image:
     repository: redis
@@ -69,11 +85,12 @@ redis:
       memory: 256Mi
 
 checkoutservice:
-  enabled: false
+  enabled: true
   replicaCount: 2
   image:
     name: checkoutservice
     useGlobal: true
+    tag: "checkoutservice-f2b66d9f1d6996b5bbcbf06b90dfa69bd040acb6"
   resources:
     requests:
       cpu: 100m
@@ -83,11 +100,12 @@ checkoutservice:
       memory: 128Mi
 
 currencyservice:
-  enabled: false
+  enabled: true
   replicaCount: 2
   image:
     name: currencyservice
     useGlobal: true
+    tag: "currencyservice-f2b66d9f1d6996b5bbcbf06b90dfa69bd040acb6"
   resources:
     requests:
       cpu: 100m
@@ -97,11 +115,12 @@ currencyservice:
       memory: 128Mi
 
 emailservice:
-  enabled: false
+  enabled: true
   replicaCount: 1
   image:
     name: emailservice
     useGlobal: true
+    tag: "emailservice-f2b66d9f1d6996b5bbcbf06b90dfa69bd040acb6"
   resources:
     requests:
       cpu: 100m
@@ -111,11 +130,12 @@ emailservice:
       memory: 128Mi
 
 paymentservice:
-  enabled: false
+  enabled: true
   replicaCount: 1
   image:
     name: paymentservice
     useGlobal: true
+    tag: "paymentservice-f2b66d9f1d6996b5bbcbf06b90dfa69bd040acb6"
   resources:
     requests:
       cpu: 100m
@@ -125,11 +145,12 @@ paymentservice:
       memory: 128Mi
 
 productcatalogservice:
-  enabled: false
+  enabled: true
   replicaCount: 2
   image:
     name: productcatalogservice
     useGlobal: true
+    tag: "productcatalogservice-f2b66d9f1d6996b5bbcbf06b90dfa69bd040acb6"
   resources:
     requests:
       cpu: 100m
@@ -139,11 +160,12 @@ productcatalogservice:
       memory: 128Mi
 
 recommendationservice:
-  enabled: false
+  enabled: true
   replicaCount: 1
   image:
     name: recommendationservice
     useGlobal: true
+    tag: "recommendationservice-f2b66d9f1d6996b5bbcbf06b90dfa69bd040acb6"
   resources:
     requests:
       cpu: 100m
@@ -153,11 +175,12 @@ recommendationservice:
       memory: 450Mi
 
 shippingservice:
-  enabled: false
+  enabled: true
   replicaCount: 1
   image:
     name: shippingservice
     useGlobal: true
+    tag: "shippingservice-f2b66d9f1d6996b5bbcbf06b90dfa69bd040acb6"
   resources:
     requests:
       cpu: 100m
@@ -167,11 +190,12 @@ shippingservice:
       memory: 128Mi
 
 adservice:
-  enabled: false
+  enabled: true
   replicaCount: 1
   image:
     name: adservice
     useGlobal: true
+    tag: "adservice-f2b66d9f1d6996b5bbcbf06b90dfa69bd040acb6"
   resources:
     requests:
       cpu: 200m
@@ -181,11 +205,19 @@ adservice:
       memory: 300Mi
 
 shoppingassistantservice:
+  # NOT deployable here — its source (shoppingassistantservice.py) calls
+  # Google Cloud AlloyDB, Secret Manager, and the Gemini API at module
+  # import time, before Flask even starts. This is an AWS-only project;
+  # none of that GCP infrastructure exists or is in scope to add. The
+  # container would crash immediately on startup regardless of health
+  # probe config. CI/CD still builds/scans/signs it fine (see cd.yml) —
+  # only cluster deployment is out of scope.
   enabled: false
   replicaCount: 1
   image:
     name: shoppingassistantservice
     useGlobal: true
+    tag: "shoppingassistantservice-f2b66d9f1d6996b5bbcbf06b90dfa69bd040acb6"
   resources:
     requests:
       cpu: 100m
@@ -195,11 +227,12 @@ shoppingassistantservice:
       memory: 128Mi
 
 loadgenerator:
-  enabled: false
+  enabled: true
   replicaCount: 1
   image:
     name: loadgenerator
     useGlobal: true
+    tag: "loadgenerator-f2b66d9f1d6996b5bbcbf06b90dfa69bd040acb6"
   resources:
     requests:
       cpu: 300m
@@ -208,9 +241,7 @@ loadgenerator:
       cpu: 500m
       memory: 512Mi
 
-# No ingress-nginx controller in the cluster yet — reachability for now is
-# via frontend's NodePort Service (see templates/frontend.yaml), port 30000
-# on any worker node's public IP. Revisit once an ingress controller exists.
+# No ingress-nginx controller in the cluster yet — see note at top of file.
 ingress:
   enabled: false
   className: nginx
@@ -218,15 +249,12 @@ ingress:
   tls:
     enabled: false
 
-# Off for now — hpa.yaml hardcodes HPA objects for services not yet
-# deployed (cartservice, checkoutservice, productcatalogservice); enabling
-# this before those services exist just produces harmless but noisy
-# "unable to fetch metrics" warnings.
 hpa:
-  enabled: false
+  enabled: true
 
+# See note at top of file — 6 of 12 services have no explicit policy yet.
 networkPolicy:
   enabled: false
 
 podDisruptionBudget:
-  enabled: false
+  enabled: true

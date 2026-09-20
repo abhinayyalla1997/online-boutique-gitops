@@ -35,7 +35,7 @@ spec:
             - sh
             - -c
             - |
-              until wget -q --spider http://frontend:80/healthz; do
+              until wget -q --spider http://frontend:80/_healthz; do
                 echo "waiting for frontend..."
                 sleep 3
               done
